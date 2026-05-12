@@ -1,13 +1,12 @@
 import streamlit as st
-import fitz  # PyMuPDF
-import base64
+import fitz
 import re
 import os
 
 # 페이지 설정
 st.set_page_config(page_title="PDF 통합 검색 시스템", layout="wide")
 
-# --- [사용자님 최애 디자인] UI 스타일 복구 ---
+# --- 사용자께서 가장 좋아하셨던 깔끔한 디자인 (버튼 위치 및 스타일) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600&display=swap');
@@ -58,7 +57,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 1. 인덱싱 함수 (static 폴더 안의 파일을 직접 읽기)
+# 1. 인덱싱 함수 (static 폴더 안의 파일을 직접 읽어 속도 최적화)
 @st.cache_resource
 def load_local_pdfs(file_list):
     all_indexed_data = []
@@ -70,48 +69,50 @@ def load_local_pdfs(file_list):
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
             text = page.get_text("text")
+            # 줄바꿈 제거 및 문장 단위 분리
             cleaned_text = re.sub(r'\n+', ' ', text)
             sentences = re.split(r'(?<=[.!?])\s+', cleaned_text)
             all_indexed_data.append({
                 "file_name": file_name,
-                "file_path": file_path,
                 "page": page_num + 1,
                 "sentences": sentences
             })
     return all_indexed_data
 
-# 설정 정보
+# --- 사용자 설정 정보 ---
+GITHUB_USER = "sjoh6136"
+GITHUB_REPO = "jinijin_search"
 PDF_FILES = ["search1.pdf", "search2.pdf"] 
 
-with st.spinner("PDF 분석 중..."):
+with st.spinner("PDF 데이터를 분석하고 있습니다..."):
     pdf_index = load_local_pdfs(PDF_FILES)
 
 st.title("📂 PDF 통합 검색 시스템")
 
-# 검색 컨트롤
+# 검색창 및 중지 버튼 레이아웃
 col1, col2 = st.columns([0.8, 0.2])
 with col1:
-    keyword = st.text_input("검색어 입력", placeholder="찾으시는 단어를 입력하세요")
+    keyword = st.text_input("검색어 입력", placeholder="찾으시는 단어를 입력하고 엔터를 누르세요")
 with col2:
     st.write(" ")
     stop_triggered = st.button("🛑 검색 중지", use_container_width=True)
 
 if stop_triggered:
-    st.warning("작업이 중단되었습니다.")
+    st.warning("검색이 중단되었습니다.")
     st.stop()
 
 if keyword:
     found_any = False
-    seen_contexts = set()
+    seen_contexts = set() # 문맥 중복 제거용
     
     for data in pdf_index:
         file_name = data["file_name"]
-        file_path = data["file_path"]
         page_num = data["page"]
         sentences = data["sentences"]
 
         for i, sent in enumerate(sentences):
             if keyword in sent:
+                # 검색어 앞뒤 문장을 합쳐 자연스러운 문맥 생성
                 start = max(0, i - 1)
                 end = min(len(sentences), i + 2)
                 context = " ".join(sentences[start:end]).strip()
@@ -122,22 +123,11 @@ if keyword:
                     
                     highlighted_text = context.replace(keyword, f'<span class="highlight">{keyword}</span>')
                     
-                    # --- [자동 하이라이트 및 페이지 이동 처리] ---
-                    doc = fitz.open(file_path)
-                    page = doc[page_num - 1]
-                    
-                    # 해당 페이지에서 키워드 좌표 찾아 하이라이트 추가
-                    text_instances = page.search_for(keyword)
-                    for inst in text_instances:
-                        annot = page.add_highlight_annot(inst)
-                        annot.update()
-                    
-                    # 하이라이트된 데이터를 Base64로 변환
-                    pdf_bytes = doc.write()
-                    encoded_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-                    view_url = f"data:application/pdf;base64,{encoded_pdf}#page={page_num}"
-                    
-                    # 사용자님이 좋아하셨던 UI 구조에 view_url 적용
+                    # --- 페이지 점프 기능 보완 ---
+                    # GitHub Raw URL을 Google PDF Viewer에 전달하여 특정 페이지(#page=N)를 띄웁니다.
+                    raw_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/static/{file_name}"
+                    view_url = f"https://docs.google.com/viewer?url={raw_url}&embedded=true#page={page_num}"
+
                     st.markdown(f"""
                         <div class="result-box">
                             <div class="header-container">
@@ -147,8 +137,6 @@ if keyword:
                             <div style="line-height:1.8; color:#333;">{highlighted_text}</div>
                         </div>
                     """, unsafe_allow_html=True)
-                    
-                    doc.close()
 
     if not found_any:
         st.warning(f"'{keyword}'에 대한 검색 결과가 없습니다.")
