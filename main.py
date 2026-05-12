@@ -3,7 +3,10 @@ import fitz
 import re
 import os
 
-# --- 디자인 설정 (동일) ---
+# 페이지 설정
+st.set_page_config(page_title="PDF 통합 검색기", layout="wide")
+
+# --- 디자인 설정 (버튼 위치 및 폰트) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600&display=swap');
@@ -17,14 +20,15 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 1. 인덱싱 함수 (파일은 서버에서 직접 읽어 속도 유지)
+# 1. 인덱싱 함수 (static 폴더 내 파일 읽기)
 @st.cache_resource
-def load_local_pdfs(file_list):
+def load_indexed_pdfs(file_list):
     all_indexed_data = []
     for file_name in file_list:
-        if not os.path.exists(file_name):
+        file_path = f"static/{file_name}"
+        if not os.path.exists(file_path):
             continue
-        doc = fitz.open(file_name)
+        doc = fitz.open(file_path)
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
             text = page.get_text("text")
@@ -37,20 +41,20 @@ def load_local_pdfs(file_list):
             })
     return all_indexed_data
 
-# --- [중요] 깃허브 정보 설정 ---
-GITHUB_USER = "sjoh6136"
-GITHUB_REPO = "jinijin_search"
+# 설정 정보
 PDF_FILES = ["search1.pdf", "search2.pdf"] 
+GITHUB_ID = "sjoh6136"
+REPO_NAME = "jinijin_search"
 
 with st.spinner("PDF 분석 중..."):
-    pdf_index = load_local_pdfs(PDF_FILES)
+    pdf_index = load_indexed_pdfs(PDF_FILES)
 
 st.title("📂 PDF 통합 검색 시스템")
 
 # 검색창 레이아웃
 col1, col2 = st.columns([0.8, 0.2])
 with col1:
-    keyword = st.text_input("검색어 입력", placeholder="검색어를 입력하세요")
+    keyword = st.text_input("검색어 입력", placeholder="검색어를 입력하고 엔터를 누르세요")
 with col2:
     st.write(" ")
     stop_triggered = st.button("🛑 검색 중지", use_container_width=True)
@@ -80,17 +84,17 @@ if keyword:
                     
                     highlighted_text = context.replace(keyword, f'<span class="highlight">{keyword}</span>')
                     
-                    # --- [중요] 깃허브 Raw URL 생성 (페이지 이동 포함) ---
-                    # 깃허브 공식 뷰어를 활용하여 특정 페이지로 바로 이동하도록 설정
-                    view_url = f"https://github.com/{GITHUB_USER}/{GITHUB_REPO}/blob/main/{file_name}?raw=true#page={page_num}"
+                    # 브라우저에서 바로 열기 위한 GitHub Pages 주소 방식 활용
+                    # .streamlit/config.toml 설정이 되어 있어야 작동합니다.
+                    view_url = f"https://{GITHUB_ID}.github.io/{REPO_NAME}/static/{file_name}#page={page_num}"
 
                     st.markdown(f"""
                         <div class="result-box">
                             <div class="header-container">
                                 <span class="page-label">📄 {file_name} | PAGE: {page_num}</span>
-                                <a href="{view_url}" target="_blank" class="view-button">해당 페이지 보기</a>
+                                <a href="{view_url}" target="_blank" class="view-button">📄 웹에서 보기</a>
                             </div>
-                            <div style="line-height:1.8;">{highlighted_text}</div>
+                            <div style="line-height:1.8; color:#333;">{highlighted_text}</div>
                         </div>
                     """, unsafe_allow_html=True)
 
