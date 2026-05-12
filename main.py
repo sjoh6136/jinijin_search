@@ -4,20 +4,29 @@ import base64
 import re
 import os
 
-# ... 상단 CSS 디자인 부분은 그대로 유지 ...
+st.set_page_config(page_title="PDF 통합 검색기", layout="wide")
 
-# 1. 인덱싱 (GitHub 서버에 올라온 파일을 직접 읽기)
+# --- 디자인 설정 ---
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600&display=swap');
+    html, body, [class*="st-"] { font-family: 'Pretendard', sans-serif; }
+    .result-box { background-color: #ffffff; border: 1px solid #e1e4e8; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f0f2f5; padding-bottom: 10px; }
+    .page-label { font-size: 0.9rem; color: #444; font-weight: 700; }
+    .view-button { background-color: #f0f7ff; color: #0056b3 !important; padding: 5px 15px; border-radius: 6px; text-decoration: none; font-size: 0.85rem; font-weight: 600; border: 1px solid #cce3ff; }
+    .highlight { background-color: #fff5b1; color: #d73a49; font-weight: bold; padding: 0 2px; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# 1. 인덱싱 함수
 @st.cache_resource
 def load_local_pdfs(file_list):
     all_indexed_data = []
     for file_name in file_list:
-        # 파일이 실제로 존재하는지 확인
         if not os.path.exists(file_name):
-            st.error(f"파일을 찾을 수 없습니다: {file_name}. 파일명이 정확한지 확인해 주세요.")
             continue
-            
-        doc = fitz.open(file_name) # 로컬 경로로 바로 열기
-        
+        doc = fitz.open(file_name)
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
             text = page.get_text("text")
@@ -30,22 +39,50 @@ def load_local_pdfs(file_list):
             })
     return all_indexed_data
 
-# --- 핵심 수정 부분 ---
-# GitHub 레포지토리에 올린 실제 파일명과 '대소문자'까지 똑같이 적어주세요.
-PDF_FILES = ["file1.pdf", "file2.pdf"] 
+# 파일명 반영 (확장자 .pdf가 붙어있어야 합니다)
+PDF_FILES = ["search1.pdf", "search2.pdf"] 
 
 with st.spinner("PDF 분석 중..."):
-    # 함수명을 load_local_pdfs로 변경하여 호출
     pdf_index = load_local_pdfs(PDF_FILES)
 
-# --- 이하 검색 및 출력 로직 ---
-# (이전 코드와 동일하되, '해당 페이지 보기' 링크 생성 부분만 아래처럼 수정)
+st.title("📂 PDF 통합 검색 시스템")
 
-# ... 중략 ...
-                    # 로컬 파일을 브라우저로 띄우기 위한 base64 변환
+col1, col2 = st.columns([0.8, 0.2])
+with col1:
+    keyword = st.text_input("검색어 입력", placeholder="검색어를 입력하세요")
+with col2:
+    st.write(" ")
+    stop_triggered = st.button("🛑 검색 중지", use_container_width=True)
+
+if stop_triggered:
+    st.warning("검색이 중단되었습니다.")
+    st.stop()
+
+if keyword:
+    found_any = False
+    seen_contexts = set()
+    
+    for data in pdf_index:
+        file_name = data["file_name"]
+        page_num = data["page"]
+        sentences = data["sentences"]
+
+        for i, sent in enumerate(sentences):
+            if keyword in sent:
+                start = max(0, i - 1)
+                end = min(len(sentences), i + 2)
+                context = " ".join(sentences[start:end]).strip()
+
+                if context not in seen_contexts:
+                    found_any = True
+                    seen_contexts.add(context)
+                    
+                    highlighted_text = context.replace(keyword, f'<span class="highlight">{keyword}</span>')
+                    
+                    # PDF 파일 열기 위한 base64 처리
                     with open(file_name, "rb") as f:
-                        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
-                    view_url = f"data:application/pdf;base64,{base64_pdf}#page={page_num}"
+                        encoded_pdf = base64.b64encode(f.read()).decode('utf-8')
+                    view_url = f"data:application/pdf;base64,{encoded_pdf}#page={page_num}"
 
                     st.markdown(f"""
                         <div class="result-box">
@@ -53,6 +90,9 @@ with st.spinner("PDF 분석 중..."):
                                 <span class="page-label">📄 {file_name} | PAGE: {page_num}</span>
                                 <a href="{view_url}" target="_blank" class="view-button">해당 페이지 보기</a>
                             </div>
-                            <div style="line-height:1.8; color:#333;">{highlighted_text}</div>
+                            <div style="line-height:1.8;">{highlighted_text}</div>
                         </div>
                     """, unsafe_allow_html=True)
+
+    if not found_any:
+        st.warning(f"'{keyword}'에 대한 결과가 없습니다.")
