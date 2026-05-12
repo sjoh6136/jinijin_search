@@ -1,12 +1,9 @@
 import streamlit as st
 import fitz
-import base64
 import re
 import os
 
-st.set_page_config(page_title="PDF 통합 검색기", layout="wide")
-
-# --- 디자인 설정 ---
+# --- 디자인 설정 (동일) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600&display=swap');
@@ -14,12 +11,13 @@ st.markdown("""
     .result-box { background-color: #ffffff; border: 1px solid #e1e4e8; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
     .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f0f2f5; padding-bottom: 10px; }
     .page-label { font-size: 0.9rem; color: #444; font-weight: 700; }
-    .view-button { background-color: #f0f7ff; color: #0056b3 !important; padding: 5px 15px; border-radius: 6px; text-decoration: none; font-size: 0.85rem; font-weight: 600; border: 1px solid #cce3ff; }
+    .view-button { background-color: #f0f7ff; color: #0056b3 !important; padding: 5px 15px; border-radius: 6px; text-decoration: none; font-size: 0.85rem; font-weight: 600; border: 1px solid #cce3ff; transition: 0.2s; }
+    .view-button:hover { background-color: #0056b3; color: white !important; }
     .highlight { background-color: #fff5b1; color: #d73a49; font-weight: bold; padding: 0 2px; }
     </style>
     """, unsafe_allow_html=True)
 
-# 1. 인덱싱 함수
+# 1. 인덱싱 함수 (파일은 서버에서 직접 읽어 속도 유지)
 @st.cache_resource
 def load_local_pdfs(file_list):
     all_indexed_data = []
@@ -39,7 +37,9 @@ def load_local_pdfs(file_list):
             })
     return all_indexed_data
 
-# 파일명 반영 (확장자 .pdf가 붙어있어야 합니다)
+# --- [중요] 깃허브 정보 설정 ---
+GITHUB_USER = "sjoh6136"
+GITHUB_REPO = "jinijin_search"
 PDF_FILES = ["search1.pdf", "search2.pdf"] 
 
 with st.spinner("PDF 분석 중..."):
@@ -47,6 +47,7 @@ with st.spinner("PDF 분석 중..."):
 
 st.title("📂 PDF 통합 검색 시스템")
 
+# 검색창 레이아웃
 col1, col2 = st.columns([0.8, 0.2])
 with col1:
     keyword = st.text_input("검색어 입력", placeholder="검색어를 입력하세요")
@@ -79,10 +80,9 @@ if keyword:
                     
                     highlighted_text = context.replace(keyword, f'<span class="highlight">{keyword}</span>')
                     
-                    # PDF 파일 열기 위한 base64 처리
-                    with open(file_name, "rb") as f:
-                        encoded_pdf = base64.b64encode(f.read()).decode('utf-8')
-                    view_url = f"data:application/pdf;base64,{encoded_pdf}#page={page_num}"
+                    # --- [중요] 깃허브 Raw URL 생성 (페이지 이동 포함) ---
+                    # 깃허브 공식 뷰어를 활용하여 특정 페이지로 바로 이동하도록 설정
+                    view_url = f"https://github.com/{GITHUB_USER}/{GITHUB_REPO}/blob/main/{file_name}?raw=true#page={page_num}"
 
                     st.markdown(f"""
                         <div class="result-box">
