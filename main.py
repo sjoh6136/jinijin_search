@@ -5,9 +5,9 @@ import re
 import os
 
 # 페이지 설정
-st.set_page_config(page_title="PDF 통합 검색 & 하이라이트 시스템", layout="wide")
+st.set_page_config(page_title="PDF 통합 검색 시스템", layout="wide")
 
-# --- UI 디자인 (이전의 깔끔한 스타일 유지) ---
+# --- [사용자님 최애 디자인] UI 스타일 복구 ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600&display=swap');
@@ -20,7 +20,6 @@ st.markdown("""
         padding: 20px; 
         margin-bottom: 20px; 
         box-shadow: 0 2px 8px rgba(0,0,0,0.05); 
-        position: relative;
     }
     .header-container { 
         display: flex; 
@@ -36,17 +35,19 @@ st.markdown("""
         font-weight: 700; 
     }
     .view-button { 
-        background-color: #0366d6; 
-        color: white !important; 
-        padding: 6px 16px; 
+        background-color: #f0f7ff; 
+        color: #0056b3 !important; 
+        padding: 5px 15px; 
         border-radius: 6px; 
         text-decoration: none; 
         font-size: 0.85rem; 
         font-weight: 600; 
+        border: 1px solid #cce3ff; 
         transition: 0.2s; 
     }
     .view-button:hover { 
         background-color: #0056b3; 
+        color: white !important; 
     }
     .highlight { 
         background-color: #fff5b1; 
@@ -57,9 +58,9 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 1. 인덱싱 함수 (텍스트 데이터 미리 추출)
+# 1. 인덱싱 함수 (static 폴더 안의 파일을 직접 읽기)
 @st.cache_resource
-def load_indexed_pdfs(file_list):
+def load_local_pdfs(file_list):
     all_indexed_data = []
     for file_name in file_list:
         file_path = f"static/{file_name}"
@@ -79,15 +80,15 @@ def load_indexed_pdfs(file_list):
             })
     return all_indexed_data
 
-# --- 사용자 설정 정보 ---
+# 설정 정보
 PDF_FILES = ["search1.pdf", "search2.pdf"] 
 
-with st.spinner("PDF를 정밀 분석 중입니다..."):
-    pdf_index = load_indexed_pdfs(PDF_FILES)
+with st.spinner("PDF 분석 중..."):
+    pdf_index = load_local_pdfs(PDF_FILES)
 
-st.title("🔍 PDF 스마트 자동화 검색기")
+st.title("📂 PDF 통합 검색 시스템")
 
-# 검색 컨트롤 레이아웃
+# 검색 컨트롤
 col1, col2 = st.columns([0.8, 0.2])
 with col1:
     keyword = st.text_input("검색어 입력", placeholder="찾으시는 단어를 입력하세요")
@@ -121,36 +122,33 @@ if keyword:
                     
                     highlighted_text = context.replace(keyword, f'<span class="highlight">{keyword}</span>')
                     
-                    # --- [자동화 핵심] 실시간 하이라이트 PDF 생성 ---
+                    # --- [자동 하이라이트 및 페이지 이동 처리] ---
                     doc = fitz.open(file_path)
                     page = doc[page_num - 1]
                     
-                    # 해당 페이지에서 키워드 좌표 탐색
+                    # 해당 페이지에서 키워드 좌표 찾아 하이라이트 추가
                     text_instances = page.search_for(keyword)
-                    
-                    # 노란색 하이라이트 추가
                     for inst in text_instances:
                         annot = page.add_highlight_annot(inst)
                         annot.update()
                     
-                    # 메모리 상에서 PDF 데이터 생성
+                    # 하이라이트된 데이터를 Base64로 변환
                     pdf_bytes = doc.write()
                     encoded_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-                    
-                    # 페이지 번호까지 포함된 데이터 주소 생성
                     view_url = f"data:application/pdf;base64,{encoded_pdf}#page={page_num}"
-
+                    
+                    # 사용자님이 좋아하셨던 UI 구조에 view_url 적용
                     st.markdown(f"""
                         <div class="result-box">
                             <div class="header-container">
                                 <span class="page-label">📄 {file_name} | PAGE: {page_num}</span>
-                                <a href="{view_url}" target="_blank" class="view-button">✨ 하이라이트된 페이지 열기</a>
+                                <a href="{view_url}" target="_blank" class="view-button">해당 페이지 보기</a>
                             </div>
                             <div style="line-height:1.8; color:#333;">{highlighted_text}</div>
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    doc.close() # 메모리 해제
+                    doc.close()
 
     if not found_any:
         st.warning(f"'{keyword}'에 대한 검색 결과가 없습니다.")
