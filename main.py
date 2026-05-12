@@ -6,7 +6,7 @@ import os
 # 페이지 설정
 st.set_page_config(page_title="PDF 통합 검색 시스템", layout="wide")
 
-# --- 사용자께서 좋아하셨던 깔끔한 디자인 ---
+# --- 사용자께서 가장 좋아하셨던 깔끔한 디자인 (버튼 위치 및 스타일) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600&display=swap');
@@ -57,18 +57,19 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 1. 인덱싱 함수 (static 폴더 안의 파일을 읽도록 경로 설정)
+# 1. 인덱싱 함수 (static 폴더 안의 파일을 직접 읽어 속도 최적화)
 @st.cache_resource
 def load_local_pdfs(file_list):
     all_indexed_data = []
     for file_name in file_list:
-        file_path = f"static/{file_name}"  # static 폴더 내 파일 경로
+        file_path = f"static/{file_name}"
         if not os.path.exists(file_path):
             continue
         doc = fitz.open(file_path)
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
             text = page.get_text("text")
+            # 줄바꿈 제거 및 문장 단위 분리
             cleaned_text = re.sub(r'\n+', ' ', text)
             sentences = re.split(r'(?<=[.!?])\s+', cleaned_text)
             all_indexed_data.append({
@@ -78,7 +79,7 @@ def load_local_pdfs(file_list):
             })
     return all_indexed_data
 
-# --- 사용자 설정 정보 반영 ---
+# --- 사용자 설정 정보 ---
 GITHUB_USER = "sjoh6136"
 GITHUB_REPO = "jinijin_search"
 PDF_FILES = ["search1.pdf", "search2.pdf"] 
@@ -88,10 +89,10 @@ with st.spinner("PDF 데이터를 분석하고 있습니다..."):
 
 st.title("📂 PDF 통합 검색 시스템")
 
-# 검색창 레이아웃
+# 검색창 및 중지 버튼 레이아웃
 col1, col2 = st.columns([0.8, 0.2])
 with col1:
-    keyword = st.text_input("검색어 입력", placeholder="찾으시는 단어를 입력하세요")
+    keyword = st.text_input("검색어 입력", placeholder="찾으시는 단어를 입력하고 엔터를 누르세요")
 with col2:
     st.write(" ")
     stop_triggered = st.button("🛑 검색 중지", use_container_width=True)
@@ -102,7 +103,7 @@ if stop_triggered:
 
 if keyword:
     found_any = False
-    seen_contexts = set()
+    seen_contexts = set() # 문맥 중복 제거용
     
     for data in pdf_index:
         file_name = data["file_name"]
@@ -111,6 +112,7 @@ if keyword:
 
         for i, sent in enumerate(sentences):
             if keyword in sent:
+                # 검색어 앞뒤 문장을 합쳐 자연스러운 문맥 생성
                 start = max(0, i - 1)
                 end = min(len(sentences), i + 2)
                 context = " ".join(sentences[start:end]).strip()
@@ -121,9 +123,10 @@ if keyword:
                     
                     highlighted_text = context.replace(keyword, f'<span class="highlight">{keyword}</span>')
                     
-                    # 깃허브에서 웹으로 바로 보기 위한 URL (blob 경로 사용)
-                    # 이 링크는 깃허브 공식 뷰어를 통해 열립니다.
-                    view_url = f"https://github.com/{GITHUB_USER}/{GITHUB_REPO}/blob/main/static/{file_name}#page={page_num}"
+                    # --- 페이지 점프 기능 보완 ---
+                    # GitHub Raw URL을 Google PDF Viewer에 전달하여 특정 페이지(#page=N)를 띄웁니다.
+                    raw_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{GITHUB_REPO}/main/static/{file_name}"
+                    view_url = f"https://docs.google.com/viewer?url={raw_url}&embedded=true#page={page_num}"
 
                     st.markdown(f"""
                         <div class="result-box">
